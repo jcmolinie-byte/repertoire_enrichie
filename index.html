@@ -664,7 +664,7 @@ async function runAISearch(query) {
   document.getElementById('results-info').innerHTML = '';
 
   // Build a sample of supplier names for AI context (first 800 to stay within token limits)
-  const sample = DATA.slice(0, 800).map(s => s[0] + '|' + s[1] + '|' + (s[4] || '')).join('\n');
+  const sample = DATA.slice(0, 500).map(s => s[0] + '|' + s[1]).join('\n');
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -674,19 +674,16 @@ async function runAISearch(query) {
         model: 'llama-3.3-70b-versatile',
         max_tokens: 1000,
         messages: [
-          { role: 'system', content: 'Tu es un assistant qui aide à trouver des fournisseurs. Tu réponds UNIQUEMENT en JSON valide, sans texte avant ou après, sans markdown.' },
-          { role: 'user', content: `L'utilisateur cherche un fournisseur qui propose ce service : "${query}"
+          { role: 'system', content: 'Tu es un assistant de recherche fournisseurs. Tu analyses des noms d entreprises et tu réponds TOUJOURS en JSON pur, sans markdown, sans explication.' },
+          { role: 'user', content: `Service recherché: "${query}"
 
-Voici une liste de fournisseurs (format: numéroSAP|nom|ville) :
+Liste de fournisseurs (numéroSAP|nom):
 ${sample}
 
-Analyse les noms et identifie TOUS les fournisseurs susceptibles de proposer le service demandé, sans limite de nombre.
-Réponds UNIQUEMENT en JSON valide, sans aucun texte avant ou après, dans ce format exact :
-[
-  {"num": "1000011", "raison": "Explication courte en français pourquoi ce fournisseur correspond"},
-  ...
-]
-Si aucun fournisseur ne correspond, retourne un tableau vide [].` }
+Identifie tous les fournisseurs dont le nom suggère qu ils pourraient proposer ce service.
+Réponds UNIQUEMENT avec ce JSON, rien d autre:
+[{"num":"NUMERO","raison":"raison courte"}]
+Si aucun ne correspond: []` }
         ]
       })
     });
@@ -696,9 +693,13 @@ Si aucun fournisseur ne correspond, retourne un tableau vide [].` }
     
     let suggestions;
     try {
-      const clean = text.replace(/\`\`\`json|\`\`\`/g, '').trim();
+      let clean = text.replace(/```json|```/g, '').trim();
+      // Extract JSON array if wrapped in text
+      const match = clean.match(/\[[\s\S]*\]/);
+      if (match) clean = match[0];
       suggestions = JSON.parse(clean);
     } catch(e) {
+      console.error('Parse error:', e, 'Text:', text);
       suggestions = [];
     }
 
